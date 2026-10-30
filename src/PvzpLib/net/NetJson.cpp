@@ -362,8 +362,6 @@ void DumpString(std::string& theOut, const std::string& theText)
 }
 }
 
-Json::Json() = default;
-
 Json Json::MakeBool(bool theValue)
 {
 	Json aJson;
