@@ -1475,7 +1475,6 @@ uint32_t Board::VersusDigest() const
 {
 	uint32_t aHash = 2166136261u;
 	aHash = (aHash ^ mVersusLockstep.Tick()) * 16777619u;
-	aHash = (aHash ^ static_cast<uint32_t>(mZombieCount)) * 16777619u;
 	aHash = (aHash ^ mPlants.mSize) * 16777619u;
 	aHash = (aHash ^ mZombies.mSize) * 16777619u;
 	return aHash;
