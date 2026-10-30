@@ -9,6 +9,7 @@
 #include <atomic>
 #include <cstdint>
 #include <deque>
+#include <utility>
 #include <map>
 #include <mutex>
 #include <string>
@@ -45,6 +46,13 @@ public:
 	// Game thread: pops one disconnect reason, if the link dropped.
 	bool PollDisconnect(std::string& theReason);
 
+	// Lockstep transport: INPUT carries a Lockstep::EncodeFrames() payload,
+	// HASH carries a tick plus the simulation digest for that tick.
+	void SendInput(const std::vector<uint8_t>& thePayload);
+	bool PollInput(std::vector<uint8_t>& theOut);
+	void SendHash(uint32_t theTick, uint32_t theHash);
+	bool PollHash(uint32_t& theTick, uint32_t& theHash);
+
 	// Call once every couple of seconds; keeps the server's idle timer alive and
 	// produces the latency number shown in the room UI.
 	void SendPing();
@@ -64,6 +72,8 @@ private:
 	intptr_t mSocket = -1;
 	std::mutex mWriteMutex;
 	std::mutex mQueueMutex;
+	std::deque<std::vector<uint8_t>> mInputs;
+	std::deque<std::pair<uint32_t, uint32_t>> mHashes;
 	std::deque<NetMsg> mMessages;
 	std::deque<std::string> mDisconnects;
 	std::mutex mPingMutex;

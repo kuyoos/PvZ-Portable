@@ -351,6 +351,28 @@ void NetClient::ReaderLoop()
 					PushMessage(std::move(aMsg));
 				}
 			}
+			else if (aType == FRAME_INPUT)
+			{
+				std::lock_guard<std::mutex> aLock(mQueueMutex);
+				if (mInputs.size() >= 256)
+				{
+					mInputs.pop_front();
+				}
+				mInputs.push_back(std::move(aPayload));
+			}
+			else if (aType == FRAME_HASH && aPayload.size() >= 8)
+			{
+				const uint32_t aTick = static_cast<uint32_t>(aPayload[0]) |
+					(static_cast<uint32_t>(aPayload[1]) << 8) |
+					(static_cast<uint32_t>(aPayload[2]) << 16) |
+					(static_cast<uint32_t>(aPayload[3]) << 24);
+				const uint32_t aHash = static_cast<uint32_t>(aPayload[4]) |
+					(static_cast<uint32_t>(aPayload[5]) << 8) |
+					(static_cast<uint32_t>(aPayload[6]) << 16) |
+					(static_cast<uint32_t>(aPayload[7]) << 24);
+				std::lock_guard<std::mutex> aLock(mQueueMutex);
+				mHashes.emplace_back(aTick, aHash);
+			}
 			else if (aType == FRAME_PONG && aPayload.size() >= 8)
 			{
 				const uint32_t aSeq = static_cast<uint32_t>(aPayload[0]) |
@@ -417,6 +439,53 @@ bool NetClient::PollDisconnect(std::string& theReason)
 	}
 	theReason = std::move(mDisconnects.front());
 	mDisconnects.pop_front();
+	return true;
+}
+
+void NetClient::SendInput(const std::vector<uint8_t>& thePayload)
+{
+	if (!thePayload.empty())
+	{
+		SendFrame(FRAME_INPUT, thePayload.data(), thePayload.size());
+	}
+}
+
+bool NetClient::PollInput(std::vector<uint8_t>& theOut)
+{
+	std::lock_guard<std::mutex> aLock(mQueueMutex);
+	if (mInputs.empty())
+	{
+		return false;
+	}
+	theOut = std::move(mInputs.front());
+	mInputs.pop_front();
+	return true;
+}
+
+void NetClient::SendHash(uint32_t theTick, uint32_t theHash)
+{
+	uint8_t aPayload[8];
+	aPayload[0] = static_cast<uint8_t>(theTick & 0xFF);
+	aPayload[1] = static_cast<uint8_t>((theTick >> 8) & 0xFF);
+	aPayload[2] = static_cast<uint8_t>((theTick >> 16) & 0xFF);
+	aPayload[3] = static_cast<uint8_t>((theTick >> 24) & 0xFF);
+	aPayload[4] = static_cast<uint8_t>(theHash & 0xFF);
+	aPayload[5] = static_cast<uint8_t>((theHash >> 8) & 0xFF);
+	aPayload[6] = static_cast<uint8_t>((theHash >> 16) & 0xFF);
+	aPayload[7] = static_cast<uint8_t>((theHash >> 24) & 0xFF);
+	SendFrame(FRAME_HASH, aPayload, sizeof(aPayload));
+}
+
+bool NetClient::PollHash(uint32_t& theTick, uint32_t& theHash)
+{
+	std::lock_guard<std::mutex> aLock(mQueueMutex);
+	if (mHashes.empty())
+	{
+		return false;
+	}
+	theTick = mHashes.front().first;
+	theHash = mHashes.front().second;
+	mHashes.pop_front();
 	return true;
 }
 

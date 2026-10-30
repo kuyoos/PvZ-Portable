@@ -19,5 +19,18 @@ if(MSVC)
 	target_compile_options(pvz_net_test PRIVATE /utf-8)
 endif()
 
+add_executable(pvz_lockstep_test
+	net_lockstep_test.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../src/PvzpLib/net/Lockstep.cpp
+)
+
+target_include_directories(pvz_lockstep_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_compile_features(pvz_lockstep_test PRIVATE cxx_std_20)
+
+if(MSVC)
+	target_compile_options(pvz_lockstep_test PRIVATE /utf-8)
+endif()
+
 enable_testing()
 add_test(NAME net_protocol COMMAND pvz_net_test)
+add_test(NAME net_lockstep COMMAND pvz_lockstep_test)
