@@ -25,6 +25,7 @@
 #include "graphics/ImageFont.h"
 #include "sound/SoundManager.h"
 #include "../../LawnApp.h"
+#include "../Multiplayer/MultiplayerFont.h"
 #include "../../Resources.h"
 #include "../../PvzpLib/PvzpCommon.h"
 #include "misc/SexyMatrix.h"
@@ -206,6 +207,21 @@ void TitleScreen::Draw(Graphics* g)
 	for (Reanimation* aReanim : mApp->mEffectSystem->mReanimationHolder->mReanimations)
 	{
 		aReanim->Draw(g);
+	}
+
+	if (mTitleState == TitleState::TITLESTATE_SCREEN)
+	{
+		_Font* aCnFont = PvzpFont::GetChineseFont();
+		const std::string aLabel = "多人游戏";
+		g->SetColor(Color(24, 38, 20, 200));
+		g->FillRect(mMultiplayerRect);
+		g->SetColor(Color(196, 164, 74));
+		g->DrawRect(mMultiplayerRect);
+		g->SetFont(aCnFont);
+		g->SetColor(Color(240, 236, 214));
+		g->DrawString(aLabel,
+			mMultiplayerRect.mX + (mMultiplayerRect.mWidth - aCnFont->StringWidth(aLabel)) / 2,
+			mMultiplayerRect.mY + 8);
 	}
 }
 
@@ -495,6 +511,7 @@ void TitleScreen::Update()
 void TitleScreen::Resize(int theX, int theY, int theWidth, int theHeight)
 {
 	Widget::Resize(theX, theY, theWidth, theHeight);
+	mMultiplayerRect = Rect(mWidth - 150, mHeight - 46, 130, 32);
 }
 
 void TitleScreen::AddedToManager(Sexy::WidgetManager* theWidgetManager)
@@ -528,8 +545,15 @@ void TitleScreen::ButtonDepress(int theId)
 	}
 }
 
-void TitleScreen::MouseDown([[maybe_unused]] int x, [[maybe_unused]] int y, [[maybe_unused]] int theClickCount)
+void TitleScreen::MouseDown(int x, int y, [[maybe_unused]] int theClickCount)
 {
+	if (mLoadingThreadComplete && mTitleState == TitleState::TITLESTATE_SCREEN && mMultiplayerRect.Contains(x, y))
+	{
+		mApp->PlaySample(Sexy::SOUND_BUTTONCLICK);
+		mApp->ShowMultiplayerScreen();
+		return;
+	}
+
 	if (mLoadingThreadComplete)
 	{
 		mApp->PlaySample(Sexy::SOUND_BUTTONCLICK);

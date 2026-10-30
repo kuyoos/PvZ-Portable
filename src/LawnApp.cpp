@@ -27,6 +27,7 @@
 #include "Resources.h"
 #include "Lawn/LawnCommon.h"
 #include "Lawn/Multiplayer/MultiplayerFont.h"
+#include "Lawn/Widget/MultiplayerScreen.h"
 #include "Lawn/Board.h"
 #include "Lawn/Plant.h"
 #include "Lawn/Zombie.h"
@@ -483,6 +484,28 @@ void LawnApp::KillAwardScreen()
 	{
 		mWidgetManager->RemoveWidget(mAwardScreen.get());
 		SafeDeleteWidget(mAwardScreen.release());
+	}
+}
+
+void LawnApp::ShowMultiplayerScreen()
+{
+	if (mMultiplayerScreen)
+	{
+		return;
+	}
+
+	mMultiplayerScreen = std::make_unique<MultiplayerScreen>(this);
+	mMultiplayerScreen->Resize(0, 0, mWidth, mHeight);
+	mWidgetManager->AddWidget(mMultiplayerScreen.get());
+	mWidgetManager->SetFocus(mMultiplayerScreen.get());
+}
+
+void LawnApp::KillMultiplayerScreen()
+{
+	if (mMultiplayerScreen)
+	{
+		mWidgetManager->RemoveWidget(mMultiplayerScreen.get());
+		SafeDeleteWidget(mMultiplayerScreen.release());
 	}
 }
 

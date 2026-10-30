@@ -75,6 +75,7 @@ public:
 	bool					mDisplayPartnerLogo;
 	std::atomic<bool>		mLoaderScreenIsLoaded;
 	LawnApp*				mApp;
+	Rect					mMultiplayerRect;
 
 public:
 	TitleScreen(LawnApp* theApp);

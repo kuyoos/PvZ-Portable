@@ -32,6 +32,7 @@ class GameSelector;
 class ChallengeDefinition;
 class SeedChooserScreen;
 class AwardScreen;
+class MultiplayerScreen;
 class CreditScreen;
 class PvzpFoley;
 class PoolEffect;
@@ -77,6 +78,7 @@ public:
 	std::unique_ptr<GameSelector>	mGameSelector;
 	std::unique_ptr<SeedChooserScreen>	mSeedChooserScreen;
 	std::unique_ptr<AwardScreen>	mAwardScreen;
+	std::unique_ptr<MultiplayerScreen>	mMultiplayerScreen;
 	std::unique_ptr<CreditScreen>	mCreditScreen;
 	std::unique_ptr<ChallengeScreen>	mChallengeScreen;
 	std::unique_ptr<PvzpFoley>		mSoundSystem;
@@ -183,6 +185,8 @@ public:
 	void							KillGameSelector();
 	void							ShowAwardScreen(AwardType theAwardType, bool theShowAchievements);
 	void							KillAwardScreen();
+	void							ShowMultiplayerScreen();
+	void							KillMultiplayerScreen();
 	void							ShowSeedChooserScreen();
 	void							KillSeedChooserScreen();
 	void							DoHighScoreDialog();
