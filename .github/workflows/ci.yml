@@ -64,6 +64,13 @@ jobs:
         New-Item -ItemType Directory -Force -Path dist | Out-Null
         Copy-Item build/pvz-portable.exe dist/
 
+    - name: Protocol tests (net codec)
+      shell: pwsh
+      run: |
+        cmake -S tests -B build-net -G "Ninja" -DCMAKE_BUILD_TYPE=Release
+        cmake --build build-net
+        ctest --test-dir build-net --output-on-failure
+
     - name: Upload Artifact
       uses: actions/upload-artifact@v7
       with:
