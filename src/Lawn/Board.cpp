@@ -1452,6 +1452,26 @@ void Board::OnVersusHash(uint32_t theTick, uint32_t theHash)
 
 void Board::ExecuteVersusAction(const PvzpNet::Action& theAction)
 {
+	if (theAction.mKind == PvzpNet::ACTION_PLANT)
+	{
+		const SeedType aSeedType = static_cast<SeedType>(theAction.mSeed);
+		Plant* aPlant = AddPlant(theAction.mX, theAction.mY, aSeedType, SeedType::SEED_NONE);
+		if (aPlant != nullptr)
+		{
+			(void)TakeSunMoney(GetCurrentPlantCost(aSeedType, SeedType::SEED_NONE));
+			for (int i = 0; i < mSeedBank->mNumPackets; i++)
+			{
+				if (mSeedBank->mSeedPackets[i].mPacketType == aSeedType)
+				{
+					mSeedBank->mSeedPackets[i].WasPlanted();
+					break;
+				}
+			}
+			mApp->PlayFoley(FoleyType::FOLEY_PLANT);
+		}
+		return;
+	}
+
 	if (theAction.mKind != PvzpNet::ACTION_ZOMBIE)
 	{
 		return;
@@ -3939,6 +3959,16 @@ void Board::MouseDownWithPlant(int x, int y, int theClickCount)
 			RefreshSeedPacketFromCursor();
 			mApp->PlayFoley(FoleyType::FOLEY_DROP);
 		}
+		return;
+	}
+
+	if (mApp->mGameMode == GAMEMODE_VERSUS)
+	{
+		// Only the intent travels: both peers plant on the same lockstep tick.
+		mVersusLockstep.PushLocal(PvzpNet::Action{PvzpNet::ACTION_PLANT,
+			static_cast<int16_t>(aGridX), static_cast<int16_t>(aGridY),
+			static_cast<uint8_t>(aPlantingSeedType)});
+		ClearCursor();
 		return;
 	}
 
