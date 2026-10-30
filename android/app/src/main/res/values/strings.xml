@@ -11,6 +11,17 @@
     <string name="btn_pick_zip">Select ZIP File</string>
     <string name="btn_pick_dir">Select Resource Folder</string>
 
+    <string name="section_download_resources">Download Game Resources</string>
+    <string name="download_help">Paste a direct http/https link to main.pak. The file is downloaded into this app\'s data folder and checked before use.</string>
+    <string name="hint_pak_url">https://example.com/main.pak</string>
+    <string name="btn_download_pak">Download main.pak</string>
+    <string name="download_starting">Connecting…</string>
+    <string name="download_progress">Downloading… %1$s</string>
+    <string name="download_success">main.pak downloaded and verified.</string>
+    <string name="download_failed">Download failed: %1$s</string>
+    <string name="download_bad_url">Please enter a link starting with http:// or https://</string>
+    <string name="download_not_pak">The downloaded file is not a valid main.pak.</string>
+
     <string name="section_save_data">Import/Export Save Data (Optional)</string>
     <string name="btn_export_save">Export Save Data</string>
     <string name="btn_import_save_zip">Import Save ZIP</string>

@@ -246,7 +246,7 @@ if (WIN32)
 			OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/icon.ico"
 	)
 
-	target_link_libraries(pvz-portable PRIVATE ws2_32 user32 gdi32 winmm imm32 shlwapi)
+	target_link_libraries(pvz-portable PRIVATE ws2_32 user32 gdi32 winmm imm32 shlwapi winhttp comctl32)
 	target_compile_definitions(pvz-portable PRIVATE WINDOWS)
 
 	if(NOT CONSOLE)

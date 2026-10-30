@@ -27,6 +27,7 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -40,12 +41,16 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.documentfile.provider.DocumentFile;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -56,6 +61,8 @@ import java.util.zip.ZipInputStream;
 public class ResourceImportActivity extends AppCompatActivity {
     private static final String TAG = "ResImport";
     private static final int BUFFER_SIZE = 8192;
+    private static final String PREFS_NAME = "pvzp";
+    private static final String KEY_PAK_URL = "pak_url";
 
     private File gameDir;
     private TextView statusText;
@@ -66,6 +73,9 @@ public class ResourceImportActivity extends AppCompatActivity {
     private Button btnImportSaveZip;
     private Button btnImportSaveDir;
     private Button btnLaunchGame;
+    private EditText urlInput;
+    private Button btnDownloadPak;
+    private TextView downloadStatus;
 
     private final ActivityResultLauncher<String[]> zipPicker =
         registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
@@ -114,6 +124,12 @@ public class ResourceImportActivity extends AppCompatActivity {
         btnImportSaveZip = findViewById(R.id.btn_import_save_zip);
         btnImportSaveDir = findViewById(R.id.btn_import_save_dir);
         btnLaunchGame = findViewById(R.id.btn_launch_game);
+        urlInput        = findViewById(R.id.url_input);
+        btnDownloadPak  = findViewById(R.id.btn_download_pak);
+        downloadStatus  = findViewById(R.id.download_status);
+
+        String savedUrl = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(KEY_PAK_URL, "");
+        if (savedUrl != null && !savedUrl.isEmpty()) urlInput.setText(savedUrl);
 
         btnPickZip.setOnClickListener(v ->
             zipPicker.launch(new String[]{"application/zip", "application/x-zip-compressed"})
@@ -131,15 +147,19 @@ public class ResourceImportActivity extends AppCompatActivity {
             saveDirImporter.launch(null)
         );
         btnLaunchGame.setOnClickListener(v -> launchGame());
+        btnDownloadPak.setOnClickListener(v -> startDownload());
 
         refreshStatus();
     }
 
     private boolean hasResources() {
         if (gameDir == null) return false;
+        // A pak file is enough on its own (properties/ can live inside it);
+        // extracted loose resources work as well.
         File pak = new File(gameDir, "main.pak");
+        if (pak.isFile() && isValidPak(pak)) return true;
         File props = new File(gameDir, "properties");
-        return pak.exists() && props.isDirectory();
+        return props.isDirectory();
     }
 
     private boolean hasSaveData() {
@@ -412,6 +432,110 @@ public class ResourceImportActivity extends AppCompatActivity {
         }).start();
     }
 
+    private void setDownloadStatus(String text) {
+        if (downloadStatus != null) downloadStatus.setText(text);
+    }
+
+    private static boolean isValidPak(File file) {
+        if (file == null || !file.isFile() || file.length() < (5L << 20)) return false;
+        try (InputStream in = new FileInputStream(file)) {
+            byte[] head = new byte[4];
+            if (in.read(head) != 4) return false;
+            if ((head[0] & 0xFF) == 0xC0 && (head[1] & 0xFF) == 0x4A
+                    && (head[2] & 0xFF) == 0xC0 && (head[3] & 0xFF) == 0xBA) {
+                return true;
+            }
+            // Some distributions XOR the whole file with 0xF7.
+            for (int i = 0; i < 4; i++) head[i] = (byte) (head[i] ^ 0xF7);
+            return (head[0] & 0xFF) == 0xC0 && (head[1] & 0xFF) == 0x4A
+                    && (head[2] & 0xFF) == 0xC0 && (head[3] & 0xFF) == 0xBA;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private void startDownload() {
+        String url = urlInput.getText().toString().trim();
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            Toast.makeText(this, R.string.download_bad_url, Toast.LENGTH_LONG).show();
+            return;
+        }
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_PAK_URL, url).apply();
+        downloadPak(url);
+    }
+
+    private void downloadPak(final String url) {
+        if (gameDir == null) return;
+
+        setWorking(true);
+        setDownloadStatus(getString(R.string.download_starting));
+
+        new Thread(() -> {
+            final File part = new File(gameDir, "main.pak.part");
+            final File dest = new File(gameDir, "main.pak");
+            String error = null;
+            HttpURLConnection conn = null;
+            try {
+                conn = (HttpURLConnection) new URL(url).openConnection();
+                conn.setConnectTimeout(20000);
+                conn.setReadTimeout(60000);
+                conn.setInstanceFollowRedirects(true);
+                conn.setRequestProperty("User-Agent", "PvZ-Portable");
+                conn.connect();
+
+                int code = conn.getResponseCode();
+                if (code != HttpURLConnection.HTTP_OK) throw new IOException("HTTP " + code);
+
+                long total = conn.getContentLengthLong();
+                long got = 0;
+                int lastPercent = -1;
+                try (InputStream in = new BufferedInputStream(conn.getInputStream(), BUFFER_SIZE);
+                     OutputStream out = new BufferedOutputStream(new FileOutputStream(part), BUFFER_SIZE)) {
+                    byte[] buffer = new byte[BUFFER_SIZE * 8];
+                    int len;
+                    while ((len = in.read(buffer)) > 0) {
+                        out.write(buffer, 0, len);
+                        got += len;
+                        if (total > 0) {
+                            int percent = (int) (got * 100 / total);
+                            if (percent != lastPercent) {
+                                lastPercent = percent;
+                                final String label = getString(R.string.download_progress,
+                                        percent + "% (" + (got >> 20) + " / " + (total >> 20) + " MB)");
+                                runOnUiThread(() -> setDownloadStatus(label));
+                            }
+                        }
+                    }
+                }
+
+                if (total > 0 && got != total) throw new IOException("incomplete download");
+                if (!isValidPak(part)) throw new IOException(getString(R.string.download_not_pak));
+                if (dest.exists() && !dest.delete()) throw new IOException("cannot replace main.pak");
+                if (!part.renameTo(dest)) throw new IOException("cannot save main.pak");
+            } catch (Exception e) {
+                error = (e.getMessage() == null) ? e.toString() : e.getMessage();
+                Log.e(TAG, "Pak download failed", e);
+                //noinspection ResultOfMethodCallIgnored
+                part.delete();
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+
+            final String message = error;
+            runOnUiThread(() -> {
+                setWorking(false);
+                if (message == null) {
+                    setDownloadStatus(getString(R.string.download_success));
+                    Toast.makeText(this, R.string.download_success, Toast.LENGTH_LONG).show();
+                    refreshStatus();
+                } else {
+                    setDownloadStatus(getString(R.string.download_failed, message));
+                    Toast.makeText(this, getString(R.string.download_failed, message), Toast.LENGTH_LONG).show();
+                }
+            });
+        }).start();
+    }
+
     private void setWorking(boolean working) {
         progressBar.setVisibility(working ? View.VISIBLE : View.GONE);
         btnPickZip.setEnabled(!working);
@@ -419,6 +543,8 @@ public class ResourceImportActivity extends AppCompatActivity {
         btnExportSave.setEnabled(!working && hasSaveData());
         btnImportSaveZip.setEnabled(!working);
         btnImportSaveDir.setEnabled(!working);
+        urlInput.setEnabled(!working);
+        btnDownloadPak.setEnabled(!working);
         btnLaunchGame.setEnabled(!working && hasResources());
     }
 }

@@ -56,6 +56,7 @@
 #endif
 
 #include "SexyAppBase.h"
+#include "PvzpLib/GameDataDownload.h"
 #include "widget/WidgetManager.h"
 #include "widget/Widget.h"
 #include "misc/Debug.h"
@@ -3370,6 +3371,12 @@ void SexyAppBase::Init()
 	{
 		SetResourceFolder(mResourceDir);
 	}
+
+#if defined(_WIN32)
+	// Windows only: offer to fetch main.pak when the folder has no game data yet.
+	// The dialog is skipped when the file (or loose resources) are already there.
+	PvzpEnsureGameDataWin(GetResourceFolder());
+#endif
 
 	gPakInterface->AddPakFile(GetResourcePath("main.pak"));
 
