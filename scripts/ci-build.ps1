@@ -19,8 +19,13 @@ $m = [regex]::Match($cred, 'password=(?<t>.+)')
 if (-not $m.Success) { throw 'no GitHub credential for github.com (git credential fill returned nothing)' }
 $headers = @{ Authorization = 'Bearer ' + $m.Groups['t'].Value.Trim(); Accept = 'application/vnd.github+json' }
 
+# git writes progress to stderr; with ErrorActionPreference=Stop that would abort the script.
+$ErrorActionPreference = 'Continue'
+
 git push origin $Ref
 if ($LASTEXITCODE -ne 0) { throw "git push failed: $LASTEXITCODE" }
+
+$ErrorActionPreference = 'Stop'
 
 $body = '{"ref":"' + $Ref + '"}'
 Invoke-WebRequest -Method Post -ContentType 'application/json' -Body $body `
