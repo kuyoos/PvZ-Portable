@@ -512,19 +512,65 @@ void LawnApp::KillMultiplayerScreen()
 void LawnApp::StartVersusGame(uint32_t theSeed, const std::vector<SeedType>& thePlantPicks,
 	const std::vector<SeedType>& theZombiePicks, bool theAmPlant)
 {
-	KillMultiplayerScreen();
-
 	mVersusSeed = theSeed;
 	mVersusPlantPicks = thePlantPicks;
 	mVersusZombiePicks = theZombiePicks;
 	mVersusAmPlant = theAmPlant;
-	mGameMode = GAMEMODE_VERSUS;
 
+	if (mBoard != nullptr && mGameMode == GAMEMODE_VERSUS)
+	{
+		// pick_start already built the board (see BeginVersusPick).
+		FinishVersusPick(thePlantPicks, theZombiePicks);
+		return;
+	}
+
+	KillMultiplayerScreen();
+	mGameMode = GAMEMODE_VERSUS;
 	mFirstTimeGameSelector = false;
 	MakeNewBoard();
 	mBoard->InitLevel();
 	mBoardResult = BoardResult::BOARDRESULT_NONE;
 	mGameScene = GameScenes::SCENE_LEVEL_INTRO;
+	FinishVersusPick(thePlantPicks, theZombiePicks);
+}
+
+void LawnApp::BeginVersusPick(uint32_t theSeed, const std::vector<SeedType>& thePool,
+	std::function<void(const std::vector<SeedType>&)> theSubmit)
+{
+	if (mBoard == nullptr || mGameMode != GAMEMODE_VERSUS)
+	{
+		mVersusSeed = theSeed;
+		mVersusPlantPicks.clear();
+		mVersusZombiePicks.clear();
+		mGameMode = GAMEMODE_VERSUS;
+		mFirstTimeGameSelector = false;
+		MakeNewBoard();
+		mBoard->InitLevel();
+		mBoardResult = BoardResult::BOARDRESULT_NONE;
+		mGameScene = GameScenes::SCENE_LEVEL_INTRO;
+	}
+
+	// Nothing may advance until the server hands out the final card lists.
+	mBoard->mPaused = true;
+
+	KillSeedChooserScreen();
+	ShowSeedChooserScreen();
+	mSeedChooserScreen->SetupNetPick(mBoard->mSeedBank.get(), thePool, std::move(theSubmit));
+	mWidgetManager->SetFocus(mSeedChooserScreen.get());
+}
+
+void LawnApp::FinishVersusPick(const std::vector<SeedType>& thePlantPicks,
+	const std::vector<SeedType>& theZombiePicks)
+{
+	KillMultiplayerScreen();
+	KillSeedChooserScreen();
+
+	if (mBoard == nullptr || mGameMode != GAMEMODE_VERSUS)
+	{
+		return;
+	}
+
+	mBoard->mPaused = false;
 	mBoard->ApplyVersusPicks(thePlantPicks, theZombiePicks);
 	StartPlaying();
 }

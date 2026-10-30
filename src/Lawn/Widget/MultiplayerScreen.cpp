@@ -83,6 +83,19 @@ void MultiplayerScreen::Connect()
 	Send(MakeHello("0.2.0", 1, "1073-cn", "玩家"));
 }
 
+void MultiplayerScreen::SubmitPick(const std::vector<SeedType>& theCards)
+{
+	std::vector<std::string> aNames;
+	for (SeedType aType : theCards)
+	{
+		const char* aName = PvzpSeed::SeedTypeToName(aType);
+		if (aName != nullptr) aNames.push_back(aName);
+	}
+
+	mStatus = "已提交卡组，等待对方...";
+	Send(MakePick(mMyRole == Role::ZOMBIE ? Role::ZOMBIE : Role::PLANT, aNames));
+}
+
 void MultiplayerScreen::Send(const NetMsg& theMsg)
 {
 	if (!mClient.SendJson(theMsg))
@@ -186,7 +199,19 @@ void MultiplayerScreen::HandleMsg(const NetMsg& theMsg)
 		mMyRole = theMsg.mRole;
 		mMatchSeed = theMsg.mSeed;
 		mDeadlineLeft = static_cast<double>(theMsg.mDeadline);
-		mStatus = "进入选卡阶段（选卡界面在下一个版本接入）";
+
+		const std::vector<std::string>& aNames =
+			mMyRole == Role::ZOMBIE ? theMsg.mPool.mZombie : theMsg.mPool.mPlant;
+		std::vector<SeedType> aPool;
+		for (const std::string& aName : aNames)
+		{
+			SeedType aType = SEED_NONE;
+			if (PvzpSeed::SeedNameToType(aName, aType)) aPool.push_back(aType);
+		}
+
+		mStatus = "选卡阶段：请挑 6 张";
+		mApp->BeginVersusPick(mMatchSeed, aPool,
+			[this](const std::vector<SeedType>& theCards) { SubmitPick(theCards); });
 	}
 	else if (theMsg.mType == MsgType::START)
 	{

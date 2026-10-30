@@ -25,6 +25,7 @@
 #include "ConstEnums.h"
 #include "SexyAppFramework/SexyApp.h"
 #include "PvzpLib/PvzpFoley.h"
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -196,6 +197,10 @@ public:
 	void							KillMultiplayerScreen();
 	void							StartVersusGame(uint32_t theSeed, const std::vector<SeedType>& thePlantPicks,
 		const std::vector<SeedType>& theZombiePicks, bool theAmPlant);
+	void							BeginVersusPick(uint32_t theSeed, const std::vector<SeedType>& thePool,
+		std::function<void(const std::vector<SeedType>&)> theSubmit);
+	void							FinishVersusPick(const std::vector<SeedType>& thePlantPicks,
+		const std::vector<SeedType>& theZombiePicks);
 	void							ShowSeedChooserScreen();
 	void							KillSeedChooserScreen();
 	void							DoHighScoreDialog();

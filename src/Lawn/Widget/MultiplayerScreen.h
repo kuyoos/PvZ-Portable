@@ -13,6 +13,8 @@
 
 #include "widget/Widget.h"
 
+#include "../../ConstEnums.h"
+
 #include "../../PvzpLib/net/NetClient.h"
 
 class LawnApp;
@@ -62,6 +64,7 @@ private:
 	};
 
 	void Connect();
+	void SubmitPick(const std::vector<SeedType>& theCards);
 	void HandleMsg(const PvzpNet::NetMsg& theMsg);
 	void Send(const PvzpNet::NetMsg& theMsg);
 	void SendRooms();
