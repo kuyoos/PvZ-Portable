@@ -379,6 +379,10 @@ FodyWeavers.xsd
 *.mod
 *.smod
 
+# Go module files: the Fortran pattern above would otherwise swallow go.mod
+!**/go.mod
+!**/go.sum
+
 # Compiled Static libraries
 *.lai
 *.la
