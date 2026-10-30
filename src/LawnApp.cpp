@@ -529,6 +529,7 @@ void LawnApp::StartVersusGame(uint32_t theSeed, const std::vector<SeedType>& the
 	mFirstTimeGameSelector = false;
 	MakeNewBoard();
 	mBoard->InitLevel();
+	mBoard->PrepareVersusBank();
 	mBoardResult = BoardResult::BOARDRESULT_NONE;
 	mGameScene = GameScenes::SCENE_LEVEL_INTRO;
 	FinishVersusPick(thePlantPicks, theZombiePicks);
@@ -546,6 +547,7 @@ void LawnApp::BeginVersusPick(uint32_t theSeed, const std::vector<SeedType>& the
 		mFirstTimeGameSelector = false;
 		MakeNewBoard();
 		mBoard->InitLevel();
+		mBoard->PrepareVersusBank();
 		mBoardResult = BoardResult::BOARDRESULT_NONE;
 		mGameScene = GameScenes::SCENE_LEVEL_INTRO;
 	}
