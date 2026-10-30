@@ -1325,6 +1325,120 @@ void Board::GetZenButtonRect(GameObjectType theObjectType, Rect& theRect)
 	//return theRect;
 }
 
+constexpr const int VERSUS_ZOMBIE_CARD_TOP = 96;
+constexpr const int VERSUS_ZOMBIE_CARD_STEP = 66;
+constexpr const int VERSUS_ZOMBIE_CARD_COOLDOWN = 240;
+
+void Board::InitVersusZombieCards(const std::vector<SeedType>& theZombies)
+{
+	for (int i = 0; i < 6; i++)
+	{
+		mVersusZombieCards[i].mSeedType =
+			i < static_cast<int>(theZombies.size()) ? theZombies[i] : SeedType::SEED_NONE;
+		mVersusZombieCards[i].mCooldown = 0;
+	}
+	mVersusZombieSelected = -1;
+}
+
+void Board::DrawVersusZombieBank(Graphics* g)
+{
+	if (mApp->mVersusAmPlant)
+	{
+		return;
+	}
+
+	const int aPanelX = mWidth - 70;
+	g->SetColor(Color(0, 0, 0, 110));
+	g->FillRect(Rect(aPanelX - 6, VERSUS_ZOMBIE_CARD_TOP - 12, 62, 6 * VERSUS_ZOMBIE_CARD_STEP + 14));
+	for (int i = 0; i < 6; i++)
+	{
+		const VersusZombieCard& aCard = mVersusZombieCards[i];
+		if (aCard.mSeedType == SeedType::SEED_NONE)
+		{
+			continue;
+		}
+
+		const int aY = VERSUS_ZOMBIE_CARD_TOP + i * VERSUS_ZOMBIE_CARD_STEP;
+		if (i == mVersusZombieSelected)
+		{
+			g->SetColor(Color(255, 255, 80));
+			g->FillRect(Rect(aPanelX - 4, aY - 2, SEED_PACKET_WIDTH + 8, SEED_PACKET_HEIGHT + 4));
+		}
+		DrawSeedPacket(g, static_cast<float>(aPanelX), static_cast<float>(aY), aCard.mSeedType,
+			SeedType::SEED_NONE, 0.0f, aCard.mCooldown > 0 ? 160 : 0, false, false);
+	}
+}
+
+bool Board::VersusZombieBankMouseDown(int x, int y)
+{
+	if (mApp->mVersusAmPlant)
+	{
+		return false;
+	}
+
+	if (mVersusZombieSelected >= 0)
+	{
+		VersusPlaceZombie(x, y);
+		return true;
+	}
+
+	const int aPanelX = mWidth - 70;
+	for (int i = 0; i < 6; i++)
+	{
+		if (mVersusZombieCards[i].mSeedType == SeedType::SEED_NONE)
+		{
+			continue;
+		}
+		if (Rect(aPanelX, VERSUS_ZOMBIE_CARD_TOP + i * VERSUS_ZOMBIE_CARD_STEP,
+				SEED_PACKET_WIDTH, SEED_PACKET_HEIGHT).Contains(x, y))
+		{
+			if (mVersusZombieCards[i].mCooldown <= 0)
+			{
+				mVersusZombieSelected = i;
+			}
+			return true;
+		}
+	}
+	return false;
+}
+
+void Board::VersusPlaceZombie(int x, int y)
+{
+	if (mVersusZombieSelected < 0 || mVersusZombieSelected >= 6)
+	{
+		return;
+	}
+
+	VersusZombieCard& aCard = mVersusZombieCards[mVersusZombieSelected];
+	const SeedType aSeedType = aCard.mSeedType;
+	mVersusZombieSelected = -1;
+	if (aSeedType == SeedType::SEED_NONE)
+	{
+		return;
+	}
+
+	const int aGridX = PlantingPixelToGridX(x, y, aSeedType);
+	const int aGridY = PlantingPixelToGridY(x, y, aSeedType);
+	if (aGridX < 0 || aGridY < 0)
+	{
+		return;
+	}
+
+	const ZombieType aZombieType = Challenge::IZombieSeedTypeToZombieType(aSeedType);
+	if (aZombieType == ZombieType::ZOMBIE_INVALID)
+	{
+		return;
+	}
+
+	Zombie* aZombie = AddZombieInRow(aZombieType, aGridY, 0);
+	if (aZombie != nullptr)
+	{
+		aZombie->mPosX = static_cast<float>(GridToPixelX(aGridX, aGridY)) - 30.0f;
+		aCard.mCooldown = VERSUS_ZOMBIE_CARD_COOLDOWN;
+		mApp->PlayFoley(FoleyType::FOLEY_PLANT);
+	}
+}
+
 void Board::PrepareVersusBank()
 {
 	// The chooser sizes itself from mNumPackets, so fix six slots before the
@@ -4408,6 +4522,11 @@ void Board::MouseDown(int x, int y, int theClickCount)
 	if (mTimeStopCounter > 0)
 		return;
 
+	if (mApp->mGameMode == GAMEMODE_VERSUS && VersusZombieBankMouseDown(x, y))
+	{
+		return;
+	}
+
 	HitResult aHitResult;
 	MouseHitTest(x, y, &aHitResult);
 	if (mChallenge->MouseDown(x, y, theClickCount, &aHitResult))
@@ -5738,6 +5857,16 @@ void Board::Update()
 	MarkDirty();
 
 	mBoardUpdateCounter++;
+	if (mApp->mGameMode == GAMEMODE_VERSUS && !mPaused)
+	{
+		for (int i = 0; i < 6; i++)
+		{
+			if (mVersusZombieCards[i].mCooldown > 0)
+			{
+				mVersusZombieCards[i].mCooldown--;
+			}
+		}
+	}
 	mCutScene->Update();
 	UpdateMousePosition();
 	if (mApp->mGameMode == GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN)
@@ -7215,10 +7344,15 @@ void Board::DrawUIBottom(Graphics* g)
 
 	if (mApp->mGameScene != GameScenes::SCENE_ZOMBIES_WON)
 	{
-		if (mSeedBank->BeginDraw(g))
+		if (mApp->mVersusAmPlant && mSeedBank->BeginDraw(g))
 		{
 			mSeedBank->Draw(g);
 			mSeedBank->EndDraw(g);
+		}
+
+		if (mApp->mGameMode == GAMEMODE_VERSUS)
+		{
+			DrawVersusZombieBank(g);
 		}
 
 		if (mAdvice->mMessageStyle == MessageStyle::MESSAGE_STYLE_SLOT_MACHINE)

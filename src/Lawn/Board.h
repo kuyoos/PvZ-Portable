@@ -266,6 +266,20 @@ public:
 	void							InitLevel();
 	void							ApplyVersusPicks(const std::vector<SeedType>& thePlants, const std::vector<SeedType>& theZombies);
 	void							PrepareVersusBank();
+
+	// --- Versus zombie hand (right edge of the lawn) ---
+	struct VersusZombieCard
+	{
+		SeedType	mSeedType = SeedType::SEED_NONE;
+		int			mCooldown = 0;
+	};
+	VersusZombieCard			mVersusZombieCards[6];
+	int							mVersusZombieSelected = -1;
+
+	void							InitVersusZombieCards(const std::vector<SeedType>& theZombies);
+	void							DrawVersusZombieBank(Graphics* g);
+	bool							VersusZombieBankMouseDown(int x, int y);
+	void							VersusPlaceZombie(int x, int y);
 	void							DisplayAdvice(std::string_view theAdvice, MessageStyle theMessageStyle, AdviceType theHelpIndex);
 	void							StartLevel();
 	Plant*							AddPlant(int theGridX, int theGridY, SeedType theSeedType, SeedType theImitaterType = SeedType::SEED_NONE);

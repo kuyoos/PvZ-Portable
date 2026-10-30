@@ -574,6 +574,7 @@ void LawnApp::FinishVersusPick(const std::vector<SeedType>& thePlantPicks,
 
 	mBoard->mPaused = false;
 	mBoard->ApplyVersusPicks(thePlantPicks, theZombiePicks);
+	mBoard->InitVersusZombieCards(theZombiePicks);
 	StartPlaying();
 }
 
