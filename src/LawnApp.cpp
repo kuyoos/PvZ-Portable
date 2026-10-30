@@ -509,6 +509,26 @@ void LawnApp::KillMultiplayerScreen()
 	}
 }
 
+void LawnApp::StartVersusGame(uint32_t theSeed, const std::vector<SeedType>& thePlantPicks,
+	const std::vector<SeedType>& theZombiePicks, bool theAmPlant)
+{
+	KillMultiplayerScreen();
+
+	mVersusSeed = theSeed;
+	mVersusPlantPicks = thePlantPicks;
+	mVersusZombiePicks = theZombiePicks;
+	mVersusAmPlant = theAmPlant;
+	mGameMode = GAMEMODE_VERSUS;
+
+	mFirstTimeGameSelector = false;
+	MakeNewBoard();
+	mBoard->InitLevel();
+	mBoardResult = BoardResult::BOARDRESULT_NONE;
+	mGameScene = GameScenes::SCENE_LEVEL_INTRO;
+	mBoard->ApplyVersusPicks(thePlantPicks, theZombiePicks);
+	StartPlaying();
+}
+
 void LawnApp::ShowCreditScreen()
 {
 	mCreditScreen = std::make_unique<CreditScreen>(this);

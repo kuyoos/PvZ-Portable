@@ -8,6 +8,8 @@
 #include "graphics/Graphics.h"
 
 #include "../../LawnApp.h"
+#include "../../ConstEnums.h"
+#include "../System/SeedNames.h"
 #include "../../Resources.h"
 #include "../Multiplayer/MultiplayerFont.h"
 
@@ -187,7 +189,20 @@ void MultiplayerScreen::HandleMsg(const NetMsg& theMsg)
 	}
 	else if (theMsg.mType == MsgType::START)
 	{
-		mStatus = "对局开始：种子 " + std::to_string(theMsg.mSeed);
+		std::vector<SeedType> aPlants;
+		std::vector<SeedType> aZombies;
+		for (const std::string& aName : theMsg.mPicks.mPlant)
+		{
+			SeedType aType = SEED_NONE;
+			if (PvzpSeed::SeedNameToType(aName, aType)) aPlants.push_back(aType);
+		}
+		for (const std::string& aName : theMsg.mPicks.mZombie)
+		{
+			SeedType aType = SEED_NONE;
+			if (PvzpSeed::SeedNameToType(aName, aType)) aZombies.push_back(aType);
+		}
+
+		mApp->StartVersusGame(theMsg.mSeed, aPlants, aZombies, mMyRole != Role::ZOMBIE);
 	}
 }
 

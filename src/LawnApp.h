@@ -26,6 +26,7 @@
 #include "SexyAppFramework/SexyApp.h"
 #include "PvzpLib/PvzpFoley.h"
 #include <memory>
+#include <vector>
 
 class Board;
 class GameSelector;
@@ -79,6 +80,12 @@ public:
 	std::unique_ptr<SeedChooserScreen>	mSeedChooserScreen;
 	std::unique_ptr<AwardScreen>	mAwardScreen;
 	std::unique_ptr<MultiplayerScreen>	mMultiplayerScreen;
+
+	// Versus (multiplayer) state consumed while the board is constructed.
+	uint32_t						mVersusSeed = 0;
+	std::vector<SeedType>			mVersusPlantPicks;
+	std::vector<SeedType>			mVersusZombiePicks;
+	bool							mVersusAmPlant = true;
 	std::unique_ptr<CreditScreen>	mCreditScreen;
 	std::unique_ptr<ChallengeScreen>	mChallengeScreen;
 	std::unique_ptr<PvzpFoley>		mSoundSystem;
@@ -187,6 +194,8 @@ public:
 	void							KillAwardScreen();
 	void							ShowMultiplayerScreen();
 	void							KillMultiplayerScreen();
+	void							StartVersusGame(uint32_t theSeed, const std::vector<SeedType>& thePlantPicks,
+		const std::vector<SeedType>& theZombiePicks, bool theAmPlant);
 	void							ShowSeedChooserScreen();
 	void							KillSeedChooserScreen();
 	void							DoHighScoreDialog();

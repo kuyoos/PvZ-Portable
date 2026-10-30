@@ -83,7 +83,12 @@ Board::Board(LawnApp* theApp)
 
 	mApp->mEffectSystem->EffectSystemFreeAll();
 	mBoardRandSeed = mApp->mAppRandSeed;
-	if (mApp->IsSurvivalMode())
+	if (mApp->mGameMode == GAMEMODE_VERSUS)
+	{
+		// Both peers must run the exact same random sequence.
+		mBoardRandSeed = mApp->mVersusSeed;
+	}
+	else if (mApp->IsSurvivalMode())
 	{
 		mBoardRandSeed = Rand();
 	}
@@ -1318,6 +1323,25 @@ void Board::GetZenButtonRect(GameObjectType theObjectType, Rect& theRect)
 		}
 	}
 	//return theRect;
+}
+
+void Board::ApplyVersusPicks(const std::vector<SeedType>& thePlants, const std::vector<SeedType>& theZombies)
+{
+	(void)theZombies;
+	mSeedBank->mNumPackets = 6;
+	for (int i = 0; i < 6; i++)
+	{
+		SeedPacket* aPacket = &mSeedBank->mSeedPackets[i];
+		aPacket->mIndex = i;
+		aPacket->mX = GetSeedPacketPositionX(i);
+		aPacket->mY = 8;
+		aPacket->mPacketType = SeedType::SEED_NONE;
+		if (i < static_cast<int>(thePlants.size()))
+		{
+			aPacket->SetPacketType(thePlants[i]);
+		}
+	}
+	mSeedBank->UpdateWidth();
 }
 
 void Board::InitLevel()
