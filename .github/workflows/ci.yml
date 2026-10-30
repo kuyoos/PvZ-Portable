@@ -63,6 +63,8 @@ jobs:
 
         New-Item -ItemType Directory -Force -Path dist | Out-Null
         Copy-Item build/pvz-portable.exe dist/
+        New-Item -ItemType Directory -Force -Path dist/data | Out-Null
+        Copy-Item assets/font/pvz_cn.txt, assets/font/pvz_cn.png dist/data/
 
     - name: Protocol tests (net codec)
       shell: pwsh

@@ -26,6 +26,7 @@
 #include "LawnApp.h"
 #include "Resources.h"
 #include "Lawn/LawnCommon.h"
+#include "Lawn/Multiplayer/MultiplayerFont.h"
 #include "Lawn/Board.h"
 #include "Lawn/Plant.h"
 #include "Lawn/Zombie.h"
@@ -1160,6 +1161,7 @@ void LawnApp::Init()
 	mSawYeti = false;
 
 	SexyApp::Init();
+	PvzpFont::SetApp(this);
 
 	if (mShutdown) // MakeWindow() failed
 		return;

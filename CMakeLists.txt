@@ -48,6 +48,7 @@ file(GLOB SOURCES CONFIGURE_DEPENDS
 	src/PvzpLib/*.cpp
 	src/PvzpLib/net/*.cpp
 	src/Lawn/*.cpp
+	src/Lawn/Multiplayer/*.cpp
 	src/Lawn/Widget/*.cpp
 	src/Lawn/System/*.cpp
 )
