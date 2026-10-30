@@ -333,6 +333,9 @@ jobs:
     - uses: actions/setup-go@v5
       with:
         go-version: '1.24'
+        # The lobby module has no third party dependencies, so the module
+        # cache would always miss (and warn) without a go.sum.
+        cache: false
 
     - name: Vet and test
       working-directory: server
