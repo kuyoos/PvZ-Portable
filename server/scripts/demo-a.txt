@@ -4,5 +4,7 @@ ready
 sleep 2500
 start
 sleep 2500
+pick
+sleep 3000
 rtt
 sleep 1500

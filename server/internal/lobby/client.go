@@ -49,14 +49,14 @@ type Client struct {
 
 func newClient(h *Hub, conn net.Conn, pid int) *Client {
 	return &Client{
-		hub:       h,
-		conn:      conn,
-		br:        bufio.NewReaderSize(conn, 4096),
-		out:       make(chan []byte, writeQueueSize),
-		pid:       pid,
-		nick:      defaultNick(pid),
-		closed:    make(chan struct{}),
-		winStart:  time.Now(),
+		hub:      h,
+		conn:     conn,
+		br:       bufio.NewReaderSize(conn, 4096),
+		out:      make(chan []byte, writeQueueSize),
+		pid:      pid,
+		nick:     defaultNick(pid),
+		closed:   make(chan struct{}),
+		winStart: time.Now(),
 	}
 }
 

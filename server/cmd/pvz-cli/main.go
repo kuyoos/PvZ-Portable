@@ -15,6 +15,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"os"
 	"strconv"
@@ -33,6 +34,10 @@ type cli struct {
 	rtt      atomic.Int64
 	pid      int
 	autoJoin bool
+
+	role      string
+	pool      *proto.Pools
+	pickSlots int
 }
 
 func main() {
@@ -180,6 +185,21 @@ func (c *cli) printMsg(payload []byte) {
 		}
 	case proto.TStart:
 		fmt.Printf("[开局] 房间=%s 种子=%d 开始于=%d 资源=%s\n", m.Code, m.Seed, m.StartAt, m.Res)
+		if m.Picks != nil {
+			fmt.Printf("  植物卡组: %s\n", strings.Join(m.Picks.Plant, " "))
+			fmt.Printf("  僵尸卡组: %s\n", strings.Join(m.Picks.Zombie, " "))
+		}
+	case proto.TPickStart:
+		c.role = m.Role
+		c.pool = m.Pool
+		c.pickSlots = m.Slots
+		fmt.Printf("[选卡] 角色=%s 张数=%d 截止=%d\n", m.Role, m.Slots, m.Deadline)
+		pool := c.myPool()
+		for i, name := range pool {
+			fmt.Printf("  %2d %s\n", i, name)
+		}
+	case proto.TPickState:
+		fmt.Printf("[选卡进度] 已提交=%v\n", m.Done)
 	case proto.TLeft:
 		fmt.Printf("[离开] 原因=%s\n", m.Reason)
 	case proto.TChat:
@@ -189,6 +209,47 @@ func (c *cli) printMsg(payload []byte) {
 	default:
 		fmt.Printf("[%s] %s\n", m.T, string(payload))
 	}
+}
+
+func (c *cli) myPool() []string {
+	if c.pool == nil {
+		return nil
+	}
+	if c.role == proto.RoleZombie {
+		return c.pool.Zombie
+	}
+	return c.pool.Plant
+}
+
+func (c *cli) pick(args []string) {
+	pool := c.myPool()
+	if len(pool) == 0 {
+		fmt.Println("[选卡] 还没收到卡池")
+		return
+	}
+	slots := c.pickSlots
+	if slots <= 0 {
+		slots = 6
+	}
+
+	var cards []string
+	if len(args) == 0 {
+		for _, i := range rand.Perm(len(pool))[:min(slots, len(pool))] {
+			cards = append(cards, pool[i])
+		}
+	} else {
+		for _, arg := range args {
+			idx, err := strconv.Atoi(arg)
+			if err != nil || idx < 0 || idx >= len(pool) {
+				fmt.Printf("[选卡] 无效序号 %q\n", arg)
+				return
+			}
+			cards = append(cards, pool[idx])
+		}
+	}
+
+	fmt.Printf("[选卡] 提交 %v\n", cards)
+	c.sendMsg(proto.Msg{T: proto.TPick, Role: c.role, Cards: cards})
 }
 
 func (c *cli) command(line string) {
@@ -227,7 +288,9 @@ func (c *cli) command(line string) {
 		c.sendMsg(proto.Msg{T: proto.TChat, Text: arg})
 	case "rtt":
 		fmt.Printf("[当前延迟] %d ms\n", c.rtt.Load())
+	case "pick":
+		c.pick(fields[1:])
 	default:
-		fmt.Println("命令: rooms | create [名字] | join 房间码 | joinlast | ready | unready | start | kick pid | leave | chat 文本 | sleep 毫秒 | rtt | quit")
+		fmt.Println("命令: rooms | create [名字] | join 房间码 | joinlast | ready | unready | start | pick [序号...] | kick pid | leave | chat 文本 | sleep 毫秒 | rtt | quit")
 	}
 }

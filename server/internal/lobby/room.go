@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 package lobby
 
-import "pvzlobby/internal/proto"
+import (
+	"time"
+
+	"pvzlobby/internal/proto"
+)
 
 // Room holds the server authoritative state of one lobby room. Every method
 // here is called with Hub.mu held, so no field needs its own lock.
@@ -18,9 +22,15 @@ type Room struct {
 	Order []int // pids in join order; Order[0] is normally the host
 	Ready map[int]bool
 	Ping  map[int]int
+
+	// Card picking (design doc 5.7).
+	Role         map[int]string   // pid -> proto.RolePlant / proto.RoleZombie
+	Picks        map[int][]string // pid -> submitted cards
+	PickDeadline time.Time
+	PickTimer    *time.Timer
 }
 
-func newRoom(code, name string, host int, mode string, maxP int, res string) *Room {
+func newRoom(code, name string, host int, mode string, maxP int, res, hostRole string) *Room {
 	return &Room{
 		Code:  code,
 		Name:  name,
@@ -32,6 +42,8 @@ func newRoom(code, name string, host int, mode string, maxP int, res string) *Ro
 		Order: []int{host},
 		Ready: map[int]bool{},
 		Ping:  map[int]int{},
+		Role:  map[int]string{host: hostRole},
+		Picks: map[int][]string{},
 	}
 }
 
@@ -53,6 +65,8 @@ func (r *Room) remove(pid int) {
 	}
 	delete(r.Ready, pid)
 	delete(r.Ping, pid)
+	delete(r.Role, pid)
+	delete(r.Picks, pid)
 
 	if r.Host == pid && len(r.Order) > 0 {
 		r.Host = r.Order[0]

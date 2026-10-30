@@ -21,6 +21,7 @@ import (
 const (
 	defaultMaxRooms    = 5000
 	defaultIdleTimeout = 30 * time.Second
+	defaultPickTimeout = 60 * time.Second
 	reapInterval       = 5 * time.Second
 	startDelayMillis   = 2000
 	maxRoomsInList     = 100
@@ -32,6 +33,7 @@ type Config struct {
 	ResourceVersion string
 	MaxRooms        int
 	IdleTimeout     time.Duration
+	PickTimeout     time.Duration
 }
 
 func (c *Config) applyDefaults() {
@@ -46,6 +48,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.IdleTimeout <= 0 {
 		c.IdleTimeout = defaultIdleTimeout
+	}
+	if c.PickTimeout <= 0 {
+		c.PickTimeout = defaultPickTimeout
 	}
 }
 
@@ -194,6 +199,8 @@ func (h *Hub) handleJSON(c *Client, payload []byte) bool {
 		h.onReady(c, &m)
 	case proto.TStart:
 		h.onStart(c)
+	case proto.TPick:
+		h.onPick(c, &m)
 	case proto.TChat:
 		h.onChat(c, &m)
 	case proto.TPrtt:
@@ -284,7 +291,15 @@ func (h *Hub) onCreate(c *Client, m *proto.Msg) {
 		mode = "versus"
 	}
 
-	r := newRoom(code, name, c.pid, mode, maxP, c.res)
+	hostRole := proto.RolePlant
+	switch m.Role {
+	case proto.HostRoleZombie:
+		hostRole = proto.RoleZombie
+	case proto.HostRoleRandom:
+		hostRole = randomRole()
+	}
+
+	r := newRoom(code, name, c.pid, mode, maxP, c.res, hostRole)
 	h.rooms[code] = r
 	c.room = r
 
@@ -322,6 +337,7 @@ func (h *Hub) onJoin(c *Client, m *proto.Msg) {
 	}
 
 	r.Order = append(r.Order, c.pid)
+	r.Role[c.pid] = otherRole(r)
 	r.refreshState()
 	c.room = r
 	h.broadcastRoomLocked(r)
@@ -407,16 +423,141 @@ func (h *Hub) onStart(c *Client) {
 		return
 	}
 	r.Seed = binary.LittleEndian.Uint32(seedBuf[:])
-	r.State = proto.StatePlaying
+	r.State = proto.StatePicking
+	r.Picks = map[int][]string{}
+	r.PickDeadline = time.Now().Add(h.cfg.PickTimeout)
 
+	pool := pools()
+	deadline := r.PickDeadline.UnixMilli()
+	for _, pid := range r.Order {
+		peer := h.clients[pid]
+		if peer == nil {
+			continue
+		}
+		peer.sendMsg(proto.Msg{
+			T: proto.TPickStart, Code: r.Code, Role: r.Role[pid],
+			Pool: pool, Slots: pickSlots, Deadline: deadline,
+		})
+	}
+	h.schedulePickTimeoutLocked(r)
+	h.broadcastRoomLocked(r)
+}
+
+// onPick stores one player's card selection. Both players have to submit
+// before the match starts; whoever is missing at the deadline gets a random
+// fill so the lobby can never get stuck.
+func (h *Hub) onPick(c *Client, m *proto.Msg) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	r := c.room
+	if r == nil {
+		c.sendMsg(proto.Msg{T: proto.TErr, Err: proto.ErrNoRoom, Text: "你不在房间里"})
+		return
+	}
+	if r.State != proto.StatePicking {
+		c.sendMsg(proto.Msg{T: proto.TErr, Err: proto.ErrInGame, Text: "现在不是选卡阶段"})
+		return
+	}
+
+	role := r.Role[c.pid]
+	if role == "" {
+		role = proto.RolePlant
+		r.Role[c.pid] = role
+	}
+	if m.Role != "" && m.Role != role {
+		c.sendMsg(proto.Msg{T: proto.TErr, Err: proto.ErrPick, Text: "角色与房间分配不符"})
+		return
+	}
+	if err := validateCards(m.Cards, poolFor(role)); err != nil {
+		c.sendMsg(proto.Msg{T: proto.TErr, Err: proto.ErrPick, Text: err.Error()})
+		return
+	}
+
+	r.Picks[c.pid] = append([]string(nil), m.Cards...)
+	h.broadcastPickStateLocked(r)
+
+	if len(r.Picks) >= len(r.Order) {
+		h.finalizePickLocked(r)
+	}
+}
+
+func (h *Hub) broadcastPickStateLocked(r *Room) {
+	done := make([]int, 0, len(r.Picks))
+	for _, pid := range r.Order {
+		if _, ok := r.Picks[pid]; ok {
+			done = append(done, pid)
+		}
+	}
+	for _, pid := range r.Order {
+		peer := h.clients[pid]
+		if peer == nil {
+			continue
+		}
+		peer.sendMsg(proto.Msg{T: proto.TPickState, Code: r.Code, Done: done})
+	}
+}
+
+// schedulePickTimeoutLocked starts the countdown for the picking phase.
+func (h *Hub) schedulePickTimeoutLocked(r *Room) {
+	delay := time.Until(r.PickDeadline)
+	if delay < 0 {
+		delay = 0
+	}
+
+	r.PickTimer = time.AfterFunc(delay, func() {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+
+		if h.rooms[r.Code] != r || r.State != proto.StatePicking {
+			return
+		}
+		h.finalizePickLocked(r)
+	})
+}
+
+// finalizePickLocked fills missing selections and starts the match.
+func (h *Hub) finalizePickLocked(r *Room) {
+	if r.State != proto.StatePicking {
+		return
+	}
+	if r.PickTimer != nil {
+		r.PickTimer.Stop()
+		r.PickTimer = nil
+	}
+
+	if len(r.Order) < 2 {
+		// Someone left while choosing: nothing to play, back to the lobby.
+		r.Picks = map[int][]string{}
+		r.State = proto.StateIdle
+		r.refreshState()
+		h.broadcastRoomLocked(r)
+		return
+	}
+
+	picks := &proto.Picks{Plant: []string{}, Zombie: []string{}}
+	for _, pid := range r.Order {
+		role := r.Role[pid]
+		cards := fillPicks(r.Picks[pid], poolFor(role))
+		if role == proto.RoleZombie {
+			picks.Zombie = cards
+		} else {
+			picks.Plant = cards
+		}
+	}
+	r.Picks = map[int][]string{}
+
+	r.State = proto.StatePlaying
 	startAt := time.Now().UnixMilli() + startDelayMillis
 	for _, pid := range r.Order {
 		peer := h.clients[pid]
 		if peer == nil {
 			continue
 		}
-		peer.sendMsg(proto.Msg{T: proto.TStart, Code: r.Code, Seed: r.Seed,
-			StartAt: startAt, Res: r.Res, ServerTime: time.Now().UnixMilli()})
+		peer.sendMsg(proto.Msg{
+			T: proto.TStart, Code: r.Code, Seed: r.Seed, StartAt: startAt,
+			Res: r.Res, Picks: picks, ServerTime: time.Now().UnixMilli(),
+		})
 	}
 	h.broadcastRoomLocked(r)
 }
@@ -523,6 +664,20 @@ func (h *Hub) leaveLocked(c *Client, reason string, notifySelf bool) {
 
 	if len(r.Order) == 0 {
 		delete(h.rooms, r.Code)
+		return
+	}
+
+	if r.State == proto.StatePicking {
+		// A match cannot start without both players: drop the picks and go
+		// back to the lobby instead of awarding a win.
+		if r.PickTimer != nil {
+			r.PickTimer.Stop()
+			r.PickTimer = nil
+		}
+		r.Picks = map[int][]string{}
+		r.State = proto.StateIdle
+		r.refreshState()
+		h.broadcastRoomLocked(r)
 		return
 	}
 

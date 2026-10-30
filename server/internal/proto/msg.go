@@ -18,33 +18,61 @@ const (
 	ErrNotReady    = 1009 // start requested while someone is not ready
 	ErrTooFew      = 1010 // start requested with fewer than two players
 	ErrRateLimited = 1011
+	ErrPick        = 1012 // illegal card selection
 )
 
 // Message types (Msg.T).
 const (
-	THello   = "hello"
-	TWelcome = "welcome"
-	TRooms   = "rooms"
-	TCreate  = "create"
-	TJoin    = "join"
-	TLeave   = "leave"
-	TKick    = "kick"
-	TReady   = "ready"
-	TStart   = "start"
-	TRoom    = "room"
-	TLeft    = "left"
-	TErr     = "err"
-	TChat    = "chat"
-	TPrtt    = "prtt" // client reports its measured round trip time
+	THello     = "hello"
+	TWelcome   = "welcome"
+	TRooms     = "rooms"
+	TCreate    = "create"
+	TJoin      = "join"
+	TLeave     = "leave"
+	TKick      = "kick"
+	TReady     = "ready"
+	TStart     = "start"
+	TRoom      = "room"
+	TLeft      = "left"
+	TErr       = "err"
+	TChat      = "chat"
+	TPrtt      = "prtt" // client reports its measured round trip time
+	TPick      = "pick" // client submits its six cards
+	TPickStart = "pick_start"
+	TPickState = "pick_state"
 )
 
 // Room states.
 const (
 	StateIdle    = "idle"
 	StateReady   = "ready"
+	StatePicking = "picking"
 	StatePlaying = "playing"
 	StateClosed  = "closed"
 )
+
+// Roles a player can take in a versus room.
+const (
+	RolePlant  = "plant"
+	RoleZombie = "zombie"
+
+	// What the host asks for when creating a room.
+	HostRolePlant  = "host_plant"
+	HostRoleZombie = "host_zombie"
+	HostRoleRandom = "random"
+)
+
+// Pools lists the card names each side may pick from.
+type Pools struct {
+	Plant  []string `json:"plant"`
+	Zombie []string `json:"zombie"`
+}
+
+// Picks is the final six card list of both sides.
+type Picks struct {
+	Plant  []string `json:"plant"`
+	Zombie []string `json:"zombie"`
+}
 
 // Msg is one control message. Field names are short on the wire on purpose.
 type Msg struct {
@@ -75,6 +103,15 @@ type Msg struct {
 	Err    int    `json:"err,omitempty"`
 	Reason string `json:"reason,omitempty"`
 	Text   string `json:"text,omitempty"`
+
+	// card picking (see 5.7 in the design doc)
+	Role     string   `json:"role,omitempty"`
+	Pool     *Pools   `json:"pool,omitempty"`
+	Slots    int      `json:"slots,omitempty"`
+	Deadline int64    `json:"deadline,omitempty"`
+	Cards    []string `json:"cards,omitempty"`
+	Picks    *Picks   `json:"picks,omitempty"`
+	Done     []int    `json:"done,omitempty"`
 
 	// latency probe
 	Cseq uint32 `json:"cseq,omitempty"`

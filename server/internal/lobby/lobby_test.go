@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net"
+	"reflect"
 	"testing"
 	"time"
 
@@ -24,12 +25,18 @@ type testClient struct {
 func startServer(t *testing.T, res string) string {
 	t.Helper()
 
+	return startServerWith(t, lobby.Config{ProtoVersion: 1, ResourceVersion: res})
+}
+
+func startServerWith(t *testing.T, cfg lobby.Config) string {
+	t.Helper()
+
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
 
-	hub := lobby.New(lobby.Config{ProtoVersion: 1, ResourceVersion: res})
+	hub := lobby.New(cfg)
 	go func() { _ = hub.Serve(ln) }()
 	t.Cleanup(hub.Close)
 
@@ -171,6 +178,36 @@ func (c *testClient) hello(nick, res string, protoVersion int) proto.Msg {
 	return c.want(proto.TWelcome)
 }
 
+// startMatch drives both players through the picking phase.
+func startMatch(t *testing.T, a, b *testClient) (proto.Msg, proto.Msg, []string, []string) {
+	t.Helper()
+
+	a.send(proto.Msg{T: proto.TStart})
+	aPick := a.want(proto.TPickStart)
+	bPick := b.want(proto.TPickStart)
+
+	if aPick.Role != proto.RolePlant || bPick.Role != proto.RoleZombie {
+		t.Fatalf("unexpected roles: %q / %q", aPick.Role, bPick.Role)
+	}
+	if aPick.Slots != 6 || bPick.Slots != 6 {
+		t.Fatalf("unexpected slot count: %d / %d", aPick.Slots, bPick.Slots)
+	}
+	if aPick.Pool == nil || len(aPick.Pool.Plant) < 6 || len(aPick.Pool.Zombie) < 6 {
+		t.Fatalf("pick pool is missing or too small")
+	}
+	if aPick.Deadline <= time.Now().UnixMilli() {
+		t.Fatalf("pick deadline should be in the future")
+	}
+
+	plantCards := append([]string(nil), aPick.Pool.Plant[:6]...)
+	zombieCards := append([]string(nil), bPick.Pool.Zombie[:6]...)
+
+	a.send(proto.Msg{T: proto.TPick, Role: proto.RolePlant, Cards: plantCards})
+	b.send(proto.Msg{T: proto.TPick, Role: proto.RoleZombie, Cards: zombieCards})
+
+	return a.want(proto.TStart), b.want(proto.TStart), plantCards, zombieCards
+}
+
 func TestRoomLifecycle(t *testing.T) {
 	addr := startServer(t, testRes)
 
@@ -212,9 +249,7 @@ func TestRoomLifecycle(t *testing.T) {
 		t.Fatalf("room should be ready after both players, got %q", state.State)
 	}
 
-	a.send(proto.Msg{T: proto.TStart})
-	aStart := a.want(proto.TStart)
-	bStart := b.want(proto.TStart)
+	aStart, bStart, plantCards, zombieCards := startMatch(t, a, b)
 	if aStart.Seed == 0 {
 		t.Fatalf("start seed must not be zero")
 	}
@@ -223,6 +258,15 @@ func TestRoomLifecycle(t *testing.T) {
 	}
 	if aStart.StartAt <= time.Now().UnixMilli() {
 		t.Fatalf("start time should be in the future")
+	}
+	if !reflect.DeepEqual(aStart.Picks.Plant, plantCards) {
+		t.Fatalf("plant cards not echoed: %v vs %v", aStart.Picks.Plant, plantCards)
+	}
+	if !reflect.DeepEqual(aStart.Picks.Zombie, zombieCards) {
+		t.Fatalf("zombie cards not echoed: %v vs %v", aStart.Picks.Zombie, zombieCards)
+	}
+	if !reflect.DeepEqual(aStart.Picks, bStart.Picks) {
+		t.Fatalf("players got different picks")
 	}
 
 	// Match traffic must be relayed verbatim to the other side.
@@ -337,9 +381,7 @@ func TestDisconnectDuringMatch(t *testing.T) {
 	b.send(proto.Msg{T: proto.TReady, Ready: &yes})
 	a.wantRoomState(proto.StateReady)
 
-	a.send(proto.Msg{T: proto.TStart})
-	a.want(proto.TStart)
-	b.want(proto.TStart)
+	startMatch(t, a, b)
 
 	_ = b.conn.Close()
 
@@ -379,5 +421,148 @@ func TestRoomListAndLeave(t *testing.T) {
 	list = a.want(proto.TRooms)
 	if len(list.Rooms) != 0 {
 		t.Fatalf("room should be gone after the host left, got %+v", list.Rooms)
+	}
+}
+
+// readyRoom returns two clients whose room is ready to start.
+func readyRoom(t *testing.T, addr string) (*testClient, *testClient, string) {
+	t.Helper()
+
+	a := dial(t, addr)
+	a.hello("玩家A", testRes, 1)
+	a.send(proto.Msg{T: proto.TCreate, Name: "测试房", Mode: "versus", Maxp: 2})
+	room := a.want(proto.TRoom)
+
+	b := dial(t, addr)
+	b.hello("玩家B", testRes, 1)
+	b.send(proto.Msg{T: proto.TJoin, Code: room.Code})
+	b.want(proto.TRoom)
+	a.want(proto.TRoom)
+
+	yes := true
+	a.send(proto.Msg{T: proto.TReady, Ready: &yes})
+	b.send(proto.Msg{T: proto.TReady, Ready: &yes})
+	a.wantRoomState(proto.StateReady)
+
+	return a, b, room.Code
+}
+
+func TestPickRejectsInvalidCards(t *testing.T) {
+	addr := startServer(t, testRes)
+	a, b, _ := readyRoom(t, addr)
+
+	a.send(proto.Msg{T: proto.TStart})
+	aPick := a.want(proto.TPickStart)
+	bPick := b.want(proto.TPickStart)
+	if len(aPick.Pool.Plant) < 6 || len(aPick.Pool.Zombie) < 6 {
+		t.Fatalf("server pool too small")
+	}
+
+	pool := aPick.Pool.Plant
+	cases := []struct {
+		name string
+		msg  proto.Msg
+	}{
+		{"少一张", proto.Msg{T: proto.TPick, Role: proto.RolePlant, Cards: pool[:5]}},
+		{"重复", proto.Msg{T: proto.TPick, Role: proto.RolePlant,
+			Cards: []string{pool[0], pool[0], pool[1], pool[2], pool[3], pool[4]}}},
+		{"卡池之外", proto.Msg{T: proto.TPick, Role: proto.RolePlant,
+			Cards: []string{pool[0], pool[1], pool[2], pool[3], pool[4], "SEED_IMITATER"}}},
+		{"角色不符", proto.Msg{T: proto.TPick, Role: proto.RoleZombie, Cards: pool[:6]}},
+	}
+
+	for _, tc := range cases {
+		a.send(tc.msg)
+		m := a.wantErr()
+		if m.Err != proto.ErrPick {
+			t.Fatalf("%s: want error %d, got %d (%s)", tc.name, proto.ErrPick, m.Err, m.Text)
+		}
+	}
+
+	// A legal pick must still work after the rejected ones.
+	a.send(proto.Msg{T: proto.TPick, Role: proto.RolePlant, Cards: pool[:6]})
+	b.send(proto.Msg{T: proto.TPick, Role: proto.RoleZombie, Cards: bPick.Pool.Zombie[:6]})
+	a.want(proto.TStart)
+	b.want(proto.TStart)
+}
+
+func TestPickTimeoutFillsRandomly(t *testing.T) {
+	addr := startServerWith(t, lobby.Config{
+		ProtoVersion:    1,
+		ResourceVersion: testRes,
+		PickTimeout:     200 * time.Millisecond,
+	})
+	a, b, _ := readyRoom(t, addr)
+
+	a.send(proto.Msg{T: proto.TStart})
+	aPick := a.want(proto.TPickStart)
+	b.want(proto.TPickStart)
+
+	aStart := a.want(proto.TStart)
+	bStart := b.want(proto.TStart)
+	if !reflect.DeepEqual(aStart.Picks, bStart.Picks) {
+		t.Fatalf("timeout fill produced different picks")
+	}
+
+	checkFilled := func(name string, cards, pool []string) {
+		t.Helper()
+		if len(cards) != 6 {
+			t.Fatalf("%s: want 6 cards, got %d (%v)", name, len(cards), cards)
+		}
+		seen := map[string]bool{}
+		inPool := map[string]bool{}
+		for _, c := range pool {
+			inPool[c] = true
+		}
+		for _, c := range cards {
+			if !inPool[c] {
+				t.Fatalf("%s: %q is outside the pool", name, c)
+			}
+			if seen[c] {
+				t.Fatalf("%s: duplicate card %q", name, c)
+			}
+			seen[c] = true
+		}
+	}
+
+	checkFilled("plant", aStart.Picks.Plant, aPick.Pool.Plant)
+	checkFilled("zombie", aStart.Picks.Zombie, aPick.Pool.Zombie)
+}
+
+func TestPickAfterStartRejected(t *testing.T) {
+	addr := startServer(t, testRes)
+	a, b, _ := readyRoom(t, addr)
+
+	a.send(proto.Msg{T: proto.TStart})
+	aPick := a.want(proto.TPickStart)
+	b.want(proto.TPickStart)
+	a.send(proto.Msg{T: proto.TPick, Role: proto.RolePlant, Cards: aPick.Pool.Plant[:6]})
+	b.send(proto.Msg{T: proto.TPick, Role: proto.RoleZombie, Cards: aPick.Pool.Zombie[:6]})
+	a.want(proto.TStart)
+	b.want(proto.TStart)
+
+	a.send(proto.Msg{T: proto.TPick, Role: proto.RolePlant, Cards: aPick.Pool.Plant[:6]})
+	m := a.wantErr()
+	if m.Err != proto.ErrInGame {
+		t.Fatalf("want %d after the match started, got %d (%s)", proto.ErrInGame, m.Err, m.Text)
+	}
+}
+
+func TestLeaveDuringPickingResetsRoom(t *testing.T) {
+	addr := startServer(t, testRes)
+	a, b, _ := readyRoom(t, addr)
+
+	a.send(proto.Msg{T: proto.TStart})
+	a.want(proto.TPickStart)
+	b.want(proto.TPickStart)
+
+	b.send(proto.Msg{T: proto.TLeave})
+	if m := b.want(proto.TLeft); m.Reason != "leave" {
+		t.Fatalf("unexpected leave reason %q", m.Reason)
+	}
+
+	room := a.wantRoomState(proto.StateIdle)
+	if len(room.Members) != 1 {
+		t.Fatalf("want 1 member after the guest left, got %d", len(room.Members))
 	}
 }

@@ -3,5 +3,7 @@ joinlast
 sleep 500
 ready
 sleep 6000
+pick
+sleep 2500
 rtt
 sleep 1500

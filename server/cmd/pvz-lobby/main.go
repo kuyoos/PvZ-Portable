@@ -21,6 +21,7 @@ func main() {
 	resourceVersion := flag.String("res", "1073-cn", "resource version players must match to join a room")
 	maxRooms := flag.Int("max-rooms", 5000, "maximum number of rooms")
 	idle := flag.Duration("idle", 30*time.Second, "disconnect clients that stay silent this long")
+	pick := flag.Duration("pick", 60*time.Second, "how long players may choose their cards before a random fill")
 	flag.Parse()
 
 	hub := lobby.New(lobby.Config{
@@ -28,6 +29,7 @@ func main() {
 		ResourceVersion: *resourceVersion,
 		MaxRooms:        *maxRooms,
 		IdleTimeout:     *idle,
+		PickTimeout:     *pick,
 	})
 
 	ln, err := net.Listen("tcp", *addr)
