@@ -29,6 +29,8 @@
 #include <memory>
 #include <vector>
 
+#include "PvzpLib/net/NetClient.h"
+
 class Board;
 class GameSelector;
 class ChallengeDefinition;
@@ -86,6 +88,7 @@ public:
 	uint32_t						mVersusSeed = 0;
 	std::vector<SeedType>			mVersusPlantPicks;
 	std::vector<SeedType>			mVersusZombiePicks;
+	PvzpNet::NetClient				mNetClient;
 	bool							mVersusAmPlant = true;
 	std::unique_ptr<CreditScreen>	mCreditScreen;
 	std::unique_ptr<ChallengeScreen>	mChallengeScreen;

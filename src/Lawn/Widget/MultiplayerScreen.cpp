@@ -46,7 +46,6 @@ MultiplayerScreen::MultiplayerScreen(LawnApp* theApp)
 
 MultiplayerScreen::~MultiplayerScreen()
 {
-	mClient.Disconnect();
 }
 
 void MultiplayerScreen::Resize(int theX, int theY, int theWidth, int theHeight)
@@ -73,7 +72,7 @@ void MultiplayerScreen::Connect()
 	mStatus = "正在连接 " + mServer + " ...";
 
 	std::string aError;
-	if (!mClient.Connect(aHost, aPort, &aError))
+	if (!mApp->mNetClient.Connect(aHost, aPort, &aError))
 	{
 		mPhase = Phase::Failed;
 		mStatus = aError;
@@ -98,7 +97,7 @@ void MultiplayerScreen::SubmitPick(const std::vector<SeedType>& theCards)
 
 void MultiplayerScreen::Send(const NetMsg& theMsg)
 {
-	if (!mClient.SendJson(theMsg))
+	if (!mApp->mNetClient.SendJson(theMsg))
 	{
 		mStatus = "发送失败：连接已断开";
 		mPhase = Phase::Failed;
@@ -121,13 +120,13 @@ void MultiplayerScreen::Update()
 	}
 
 	NetMsg aMsg;
-	while (mClient.PollMessage(aMsg))
+	while (mApp->mNetClient.PollMessage(aMsg))
 	{
 		HandleMsg(aMsg);
 	}
 
 	std::string aReason;
-	if (mClient.PollDisconnect(aReason))
+	if (mApp->mNetClient.PollDisconnect(aReason))
 	{
 		mPhase = Phase::Failed;
 		mStatus = aReason;
@@ -135,10 +134,10 @@ void MultiplayerScreen::Update()
 		mMembers.clear();
 	}
 
-	if (mClient.IsConnected() && ++mPingTimer >= 200)
+	if (mApp->mNetClient.IsConnected() && ++mPingTimer >= 200)
 	{
 		mPingTimer = 0;
-		mClient.SendPing();
+		mApp->mNetClient.SendPing();
 	}
 }
 
@@ -391,13 +390,13 @@ void MultiplayerScreen::Draw(Graphics* g)
 	DrawText(g, aLeft, 22, "多人游戏", COL_GOLD);
 
 	std::string aPing;
-	if (!mClient.IsConnected())
+	if (!mApp->mNetClient.IsConnected())
 	{
 		aPing = "未连接";
 	}
-	else if (mClient.GetPingMs() > 0)
+	else if (mApp->mNetClient.GetPingMs() > 0)
 	{
-		aPing = "延迟 " + std::to_string(mClient.GetPingMs()) + " ms";
+		aPing = "延迟 " + std::to_string(mApp->mNetClient.GetPingMs()) + " ms";
 	}
 	else
 	{
@@ -599,7 +598,7 @@ void MultiplayerScreen::MouseDown(int x, int y, int theClickCount)
 		mApp->KillMultiplayerScreen();
 		break;
 	case B_RETRY:
-		mClient.Disconnect();
+		mApp->mNetClient.Disconnect();
 		mConnectTried = false;
 		mPhase = Phase::Offline;
 		break;

@@ -28,6 +28,7 @@
 
 #include "../ConstEnums.h"
 #include "../PvzpLib/DataArray.h"
+#include "../PvzpLib/net/Lockstep.h"
 #include "widget/Widget.h"
 #include "widget/ButtonListener.h"
 
@@ -280,6 +281,13 @@ public:
 	void							DrawVersusZombieBank(Graphics* g);
 	bool							VersusZombieBankMouseDown(int x, int y);
 	void							VersusPlaceZombie(int x, int y);
+
+	PvzpNet::Lockstep				mVersusLockstep;
+
+	void							OnVersusInput(const std::vector<uint8_t>& thePayload);
+	void							OnVersusHash(uint32_t theTick, uint32_t theHash);
+	void							ExecuteVersusAction(const PvzpNet::Action& theAction);
+	uint32_t						VersusDigest() const;
 	void							DisplayAdvice(std::string_view theAdvice, MessageStyle theMessageStyle, AdviceType theHelpIndex);
 	void							StartLevel();
 	Plant*							AddPlant(int theGridX, int theGridY, SeedType theSeedType, SeedType theImitaterType = SeedType::SEED_NONE);

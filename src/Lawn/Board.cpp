@@ -1430,13 +1430,55 @@ void Board::VersusPlaceZombie(int x, int y)
 		return;
 	}
 
-	Zombie* aZombie = AddZombieInRow(aZombieType, aGridY, 0);
+	(void)aZombieType;
+
+	// The zombie itself is spawned when the action comes out of the lockstep
+	// stream, so both peers spawn it on the same tick.
+	mVersusLockstep.PushLocal(PvzpNet::Action{PvzpNet::ACTION_ZOMBIE,
+		static_cast<int16_t>(aGridX), static_cast<int16_t>(aGridY), static_cast<uint8_t>(aSeedType)});
+	aCard.mCooldown = VERSUS_ZOMBIE_CARD_COOLDOWN;
+	mApp->PlayFoley(FoleyType::FOLEY_PLANT);
+}
+
+void Board::OnVersusInput(const std::vector<uint8_t>& thePayload)
+{
+	mVersusLockstep.OnRemoteInput(thePayload);
+}
+
+void Board::OnVersusHash(uint32_t theTick, uint32_t theHash)
+{
+	mVersusLockstep.OnRemoteHash(theTick, theHash);
+}
+
+void Board::ExecuteVersusAction(const PvzpNet::Action& theAction)
+{
+	if (theAction.mKind != PvzpNet::ACTION_ZOMBIE)
+	{
+		return;
+	}
+
+	const ZombieType aZombieType =
+		Challenge::IZombieSeedTypeToZombieType(static_cast<SeedType>(theAction.mSeed));
+	if (aZombieType == ZombieType::ZOMBIE_INVALID)
+	{
+		return;
+	}
+
+	Zombie* aZombie = AddZombieInRow(aZombieType, theAction.mY, 0);
 	if (aZombie != nullptr)
 	{
-		aZombie->mPosX = static_cast<float>(GridToPixelX(aGridX, aGridY)) - 30.0f;
-		aCard.mCooldown = VERSUS_ZOMBIE_CARD_COOLDOWN;
-		mApp->PlayFoley(FoleyType::FOLEY_PLANT);
+		aZombie->mPosX = static_cast<float>(GridToPixelX(theAction.mX, theAction.mY)) - 30.0f;
 	}
+}
+
+uint32_t Board::VersusDigest() const
+{
+	uint32_t aHash = 2166136261u;
+	aHash = (aHash ^ mVersusLockstep.Tick()) * 16777619u;
+	aHash = (aHash ^ static_cast<uint32_t>(mZombieCount)) * 16777619u;
+	aHash = (aHash ^ mPlants.mSize) * 16777619u;
+	aHash = (aHash ^ mZombies.mSize) * 16777619u;
+	return aHash;
 }
 
 void Board::PrepareVersusBank()
@@ -5852,6 +5894,41 @@ void Board::UpdateGame()
 void Board::Update()
 {
 	PvzpHesitationBracket aHesitation("Board::Update");
+
+	if (mApp->mGameMode == GAMEMODE_VERSUS && mApp->mGameScene == GameScenes::SCENE_PLAYING)
+	{
+		// Flush first: the primed frames have to reach the peer or neither side
+		// is ever allowed to run a tick.
+		std::vector<PvzpNet::Frame> aFrames = mVersusLockstep.TakeOutbound();
+		if (!aFrames.empty())
+		{
+			mApp->mNetClient.SendInput(PvzpNet::Lockstep::EncodeFrames(aFrames));
+		}
+
+		// Hard lockstep: nothing may run until the peer's frame is in hand.
+		if (!mVersusLockstep.CanAdvance())
+		{
+			return;
+		}
+
+		for (const PvzpNet::Action& aAction : mVersusLockstep.Advance())
+		{
+			ExecuteVersusAction(aAction);
+		}
+
+		aFrames = mVersusLockstep.TakeOutbound();
+		if (!aFrames.empty())
+		{
+			mApp->mNetClient.SendInput(PvzpNet::Lockstep::EncodeFrames(aFrames));
+		}
+
+		if (mVersusLockstep.Tick() % PvzpNet::Lockstep::HASH_INTERVAL == 0)
+		{
+			const uint32_t aDigest = VersusDigest();
+			mVersusLockstep.OnLocalHash(mVersusLockstep.Tick(), aDigest);
+			mApp->mNetClient.SendHash(mVersusLockstep.Tick(), aDigest);
+		}
+	}
 
 	Widget::Update();
 	MarkDirty();

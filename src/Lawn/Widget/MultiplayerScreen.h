@@ -85,7 +85,6 @@ private:
 	std::string RoleText() const;
 
 	LawnApp* mApp;
-	PvzpNet::NetClient mClient;
 
 	Phase mPhase = Phase::Offline;
 	bool mConnectTried = false;

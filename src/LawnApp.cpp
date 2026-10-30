@@ -1644,6 +1644,23 @@ void LawnApp::UpdatePlayTimeStats()
 
 void LawnApp::UpdateFrames()
 {
+	// Lockstep traffic has to keep flowing after the lobby screen is gone.
+	if (mBoard != nullptr && mNetClient.IsConnected())
+	{
+		std::vector<uint8_t> aPayload;
+		while (mNetClient.PollInput(aPayload))
+		{
+			mBoard->OnVersusInput(aPayload);
+		}
+
+		uint32_t aTick = 0;
+		uint32_t aHash = 0;
+		while (mNetClient.PollHash(aTick, aHash))
+		{
+			mBoard->OnVersusHash(aTick, aHash);
+		}
+	}
+
 	if ((!mActive || mMinimized) && mBoard)
 	{
 		mBoard->ResetFPSStats();
