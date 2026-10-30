@@ -198,6 +198,11 @@ func startMatch(t *testing.T, a, b *testClient) (proto.Msg, proto.Msg, []string,
 	if aPick.Deadline <= time.Now().UnixMilli() {
 		t.Fatalf("pick deadline should be in the future")
 	}
+	// The board RNG seed is fixed when picking starts so both clients can build
+	// the level before the final card list arrives.
+	if aPick.Seed == 0 || bPick.Seed != aPick.Seed {
+		t.Fatalf("pick_start seed mismatch: %d / %d", aPick.Seed, bPick.Seed)
+	}
 
 	plantCards := append([]string(nil), aPick.Pool.Plant[:6]...)
 	zombieCards := append([]string(nil), bPick.Pool.Zombie[:6]...)
@@ -205,7 +210,13 @@ func startMatch(t *testing.T, a, b *testClient) (proto.Msg, proto.Msg, []string,
 	a.send(proto.Msg{T: proto.TPick, Role: proto.RolePlant, Cards: plantCards})
 	b.send(proto.Msg{T: proto.TPick, Role: proto.RoleZombie, Cards: zombieCards})
 
-	return a.want(proto.TStart), b.want(proto.TStart), plantCards, zombieCards
+	aStart := a.want(proto.TStart)
+	bStart := b.want(proto.TStart)
+	if aStart.Seed != aPick.Seed || bStart.Seed != aPick.Seed {
+		t.Fatalf("start seed %d/%d differs from pick_start seed %d", aStart.Seed, bStart.Seed, aPick.Seed)
+	}
+
+	return aStart, bStart, plantCards, zombieCards
 }
 
 func TestRoomLifecycle(t *testing.T) {

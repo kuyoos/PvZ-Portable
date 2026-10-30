@@ -435,7 +435,7 @@ func (h *Hub) onStart(c *Client) {
 			continue
 		}
 		peer.sendMsg(proto.Msg{
-			T: proto.TPickStart, Code: r.Code, Role: r.Role[pid],
+			T: proto.TPickStart, Code: r.Code, Role: r.Role[pid], Seed: r.Seed,
 			Pool: pool, Slots: pickSlots, Deadline: deadline,
 		})
 	}

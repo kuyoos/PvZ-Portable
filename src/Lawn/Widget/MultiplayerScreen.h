@@ -6,6 +6,7 @@
 // panels, gold highlights).
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -98,6 +99,7 @@ private:
 	std::vector<PvzpNet::MemberInfo> mMembers;
 	int mSelectedMember = 0;
 	std::string mMyRole;
+	uint32_t mMatchSeed = 0;
 	std::string mHostRole;
 
 	int mPid = 0;

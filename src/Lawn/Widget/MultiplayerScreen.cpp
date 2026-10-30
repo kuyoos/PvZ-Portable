@@ -184,6 +184,7 @@ void MultiplayerScreen::HandleMsg(const NetMsg& theMsg)
 	else if (theMsg.mType == MsgType::PICK_START)
 	{
 		mMyRole = theMsg.mRole;
+		mMatchSeed = theMsg.mSeed;
 		mDeadlineLeft = static_cast<double>(theMsg.mDeadline);
 		mStatus = "进入选卡阶段（选卡界面在下一个版本接入）";
 	}
