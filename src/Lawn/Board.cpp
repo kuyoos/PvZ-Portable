@@ -1325,6 +1325,22 @@ void Board::GetZenButtonRect(GameObjectType theObjectType, Rect& theRect)
 	//return theRect;
 }
 
+void Board::PrepareVersusBank()
+{
+	// The chooser sizes itself from mNumPackets, so fix six slots before the
+	// picks arrive; GetNumSeedsInBank() would otherwise report the adventure
+	// bank size.
+	mSeedBank->mNumPackets = 6;
+	for (int i = 0; i < 6; i++)
+	{
+		SeedPacket* aPacket = &mSeedBank->mSeedPackets[i];
+		aPacket->mIndex = i;
+		aPacket->mX = GetSeedPacketPositionX(i);
+		aPacket->mY = 8;
+	}
+	mSeedBank->UpdateWidth();
+}
+
 void Board::ApplyVersusPicks(const std::vector<SeedType>& thePlants, const std::vector<SeedType>& theZombies)
 {
 	(void)theZombies;

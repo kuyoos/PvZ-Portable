@@ -265,6 +265,7 @@ public:
 	bool							LoadGame(const std::string& theFileName);
 	void							InitLevel();
 	void							ApplyVersusPicks(const std::vector<SeedType>& thePlants, const std::vector<SeedType>& theZombies);
+	void							PrepareVersusBank();
 	void							DisplayAdvice(std::string_view theAdvice, MessageStyle theMessageStyle, AdviceType theHelpIndex);
 	void							StartLevel();
 	Plant*							AddPlant(int theGridX, int theGridY, SeedType theSeedType, SeedType theImitaterType = SeedType::SEED_NONE);
