@@ -52,15 +52,7 @@ file(GLOB SOURCES CONFIGURE_DEPENDS
 )
 
 option(LOW_MEMORY "Enable low memory mode" OFF)
-if(NINTENDO_SWITCH)
-	list(APPEND SOURCES
-		${CMAKE_CURRENT_SOURCE_DIR}/src/SexyAppFramework/platform/switch/Window.cpp
-		${CMAKE_CURRENT_SOURCE_DIR}/src/SexyAppFramework/platform/switch/Input.cpp
-	)
-	list(APPEND PLAT_INCLUDES
-		${CMAKE_CURRENT_SOURCE_DIR}/src/SexyAppFramework/platform/switch
-	)
-elseif(EMSCRIPTEN)
+if(EMSCRIPTEN)
 	# libopenmpt has no Emscripten port; must be pre-built with emmake.
 	find_library(OPENMPT_LIBRARY NAMES openmpt libopenmpt REQUIRED)
 	set(OPENMPT_LIB ${OPENMPT_LIBRARY})
@@ -179,8 +171,6 @@ endif()
 # Android requires a shared library loaded by SDLActivity; other platforms use an executable.
 if(ANDROID)
 	add_library(pvz-portable SHARED ${SOURCES})
-elseif(IOS)
-	add_executable(pvz-portable MACOSX_BUNDLE ${SOURCES})
 else()
 	add_executable(pvz-portable ${SOURCES})
 endif()
@@ -266,60 +256,7 @@ if (WIN32)
 			target_link_options(pvz-portable PRIVATE -mwindows)
 		endif()
 	endif()
-elseif (NINTENDO_SWITCH)
-	target_link_libraries(pvz-portable PRIVATE GLESv2 EGL glapi drm_nouveau)
-
-	nx_generate_nacp(pvz-portable.nacp
-		NAME "PvZ Portable"
-		AUTHOR "wszqkzqk, etc., a community-driven port"
-		VERSION "${PVZP_VERSION_PLAIN}"
-	)
-
-	nx_create_nro(pvz-portable
-		NACP pvz-portable.nacp
-		ICON ${CMAKE_CURRENT_SOURCE_DIR}/icon-switch.jpg
-	)
 elseif (ANDROID)
 	target_link_libraries(pvz-portable PRIVATE GLESv2 EGL android log)
 	set_target_properties(pvz-portable PROPERTIES OUTPUT_NAME "main")
-elseif (IOS)
-	target_link_libraries(pvz-portable PRIVATE
-		"-framework Foundation"
-		"-framework UIKit"
-		"-framework OpenGLES"
-		"-framework QuartzCore"
-		"-framework CoreGraphics"
-		"-framework CoreMotion"
-		"-framework GameController"
-		"-framework AVFoundation"
-		"-framework AudioToolbox"
-		"-framework Metal"
-	)
-
-	configure_file(ios/Info.plist.in "${CMAKE_CURRENT_BINARY_DIR}/Info.plist" @ONLY)
-	set_target_properties(pvz-portable PROPERTIES
-		MACOSX_BUNDLE TRUE
-		MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.wszqkzqk.pvz-portable"
-		MACOSX_BUNDLE_BUNDLE_NAME "PvZ Portable"
-		MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/Info.plist"
-		XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
-		XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "16.4"
-		XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "io.github.wszqkzqk.pvz-portable"
-		XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "-"
-		XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon"
-	)
-
-	# Add launch storyboard to the bundle
-	if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ios/LaunchScreen.storyboard")
-		target_sources(pvz-portable PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/ios/LaunchScreen.storyboard")
-		set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/ios/LaunchScreen.storyboard"
-			PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
-	endif()
-
-	# Add asset catalog (app icon)
-	if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ios/Assets.xcassets")
-		target_sources(pvz-portable PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/ios/Assets.xcassets")
-		set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/ios/Assets.xcassets"
-			PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
-	endif()
 endif()
