@@ -5924,7 +5924,12 @@ void Board::Update()
 {
 	PvzpHesitationBracket aHesitation("Board::Update");
 
-	if (mApp->mGameMode == GAMEMODE_VERSUS && mApp->mGameScene == GameScenes::SCENE_PLAYING)
+	// A dropped peer must not freeze the match forever: without a connection the
+	// board simply runs on its own (the two sides will drift apart).
+	const bool aVersusLockstep =
+		mApp->mGameMode == GAMEMODE_VERSUS && mApp->mGameScene == GameScenes::SCENE_PLAYING &&
+		mApp->mNetClient.IsConnected();
+	if (aVersusLockstep)
 	{
 		// Flush first: the primed frames have to reach the peer or neither side
 		// is ever allowed to run a tick.
