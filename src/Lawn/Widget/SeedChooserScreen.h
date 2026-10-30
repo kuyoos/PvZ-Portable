@@ -25,10 +25,13 @@
 #include "../../ConstEnums.h"
 #include "../../PvzpLib/PvzpCommon.h"
 #include "widget/Widget.h"
+#include <functional>
 #include <memory>
+#include <vector>
 using namespace Sexy;
 
 class Board;
+class SeedBank;
 class LawnApp;
 class GameButton;
 class ToolTipWidget;
@@ -93,6 +96,13 @@ public:
 	SeedChooserState        mChooseState;
 	int                     mViewLawnTime;
 
+	// Multiplayer picking: the chooser shows a server-provided pool and reports
+	// the six chosen cards instead of writing the board's own bank.
+	bool                                    mNetMode = false;
+	SeedBank*                               mBankOverride = nullptr;
+	std::vector<SeedType>                   mPool;
+	std::function<void(const std::vector<SeedType>&)> mSubmitHandler;
+
 public:
 	SeedChooserScreen();
 	~SeedChooserScreen() override;
@@ -133,6 +143,12 @@ public:
 	void                    KeyDown(KeyCode theKey) override;
 	void                    KeyChar(char theChar) override;
 	void                    UpdateAfterPurchase();
+
+	bool                    IsNetMode() const { return mNetMode; }
+	SeedBank*               GetBank() const;
+	bool                    HasSeed(SeedType theSeedType) const;
+	void                    SetupNetPick(SeedBank* theBank, const std::vector<SeedType>& thePool,
+		std::function<void(const std::vector<SeedType>&)> theSubmit);
 };
 
 #endif
