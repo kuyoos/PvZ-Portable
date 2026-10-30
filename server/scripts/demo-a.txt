@@ -1,0 +1,8 @@
+create 老王的房间
+sleep 4000
+ready
+sleep 2500
+start
+sleep 2500
+rtt
+sleep 1500

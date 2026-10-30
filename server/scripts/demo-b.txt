@@ -1,0 +1,7 @@
+sleep 1500
+joinlast
+sleep 500
+ready
+sleep 6000
+rtt
+sleep 1500
